@@ -14,7 +14,7 @@ class Unbuffered(object):
 host = '5.51.214.63'
 port = 999
 import socket, sys, threading
-from time import sleep
+from time import daylight, sleep
 sys.stdout = Unbuffered(sys.stdout)
 class ThreadReception(threading.Thread):
     """objet thread gérant la réception des messages"""
@@ -24,10 +24,22 @@ class ThreadReception(threading.Thread):
         
     def run(self):
        while 1:
-           message_recu = self.connexion.recv(1024)
-           print(message_recu.decode('Utf8'))
-           if message_recu =='' or message_recu.upper() == "FIN":
-                break
+          message_recu = self.connexion.recv(65536)
+          UDecode = message_recu.decode('Utf8')
+          if UDecode[0:3] == 'ft:' :
+             with open('received_file', 'wb') as f:
+               print('file openned')
+               while 1 :
+                 print('receiving data...')
+                 data = message_recu[3:65536]
+                 if not data:
+                     break
+                 f.write(data)
+          else :
+            print(message_recu.decode('Utf8'))
+            if message_recu =='' or message_recu.upper() == "FIN":
+                 break
+
         # Le thread <réception> se termine ici.
         # On force la fermeture du thread <émission> :
        th_E._Thread__stop()
@@ -42,8 +54,18 @@ class ThreadEmission(threading.Thread):
         
     def run(self):
         while 1:
-            message_emis = input()
-            self.connexion.send(message_emis.encode('Utf8'))
+            message_emis = input('>')
+            if message_emis[0:3] == "ft:":
+                 file = input("Entrez le nom ou le Path du fichier à transférer : ")
+                 f = open(file,'rb')
+                 l = f.read(65536)
+                 while (l):
+                     data_send = b"ft:" + l
+                     self.connexion.send(data_send)
+                     print('Sent ',repr(data_send))
+                     l = f.read(65536)
+            else :
+                self.connexion.send(message_emis.encode('Utf8'))
 
 # Programme principal - Établissement de la connexion :
 connexion = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
