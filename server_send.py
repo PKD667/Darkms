@@ -3,34 +3,41 @@
  
 HOST = '192.168.1.39'
 PORT = 999
- 
+
 import socket, sys, threading
  
 class ThreadClient(threading.Thread):
   '''dérivation d'un objet thread pour gérer la connexion avec un client'''
+  Mode = False 
   def __init__(self, conn):
       threading.Thread.__init__(self)
       self.connexion = conn
- 
-  def run(self):
-      # Dialogue avec le client :
-      nom = self.getName()	    # Chaque thread possède un nom
+
+  def run(self):     
+      nom = self.getName()
       while 1:
-         msgClient = self.connexion.recv(1024).decode("Utf8")
+         msgClient = self.connexion.recv(65536)
+         UDecode = msgClient.decode('Utf8')
+         IdMode = UDecode[0:3]
          if not msgClient or msgClient.upper() =="FIN":
           break
-         elif msgClient[0:3] == "id:" :
-           nom = msgClient[3:64]
-         elif msgClient[0:3] =="ss:":
+         elif IdMode == "id:" :
+           IdClient = UDecode[3:64]
+         elif IdMode =="ss:":
            print("identification en cours....")
-           if msgClient[3:9] != "200489":
+           if UDecode[3:9] != "200489":
               break  
-         else :
-           message = "%s> %s" % (nom, msgClient)
-           print(message)
-           # Faire suivre le message à tous les autres clients :
+         elif IdMode == "ft:" :
+           data = msgClient
            for cle in conn_client:
 	           if cle != nom:	  
+	              conn_client[cle].send(data)
+         else :
+          message = "%s> %s" % (IdClient, UDecode)
+          print(message)
+          # Faire suivre le message à tous les autres clients :
+          for cle in conn_client:
+	          if cle != nom:	  
 	              conn_client[cle].send(message.encode("Utf8"))
  
       # Fermeture de la connexion :
@@ -58,6 +65,8 @@ while 1:
   # Mémoriser la connexion dans le dictionnaire :
   it = th.getName()	  # identifiant du thread
   conn_client[it] = connexion
+  print(connexion)
+  print(conn_client)
   print("Client %s connecté, adresse IP %s, port %s." %\
      (it, adresse[0], adresse[1]))
   # Dialogue avec le client :
