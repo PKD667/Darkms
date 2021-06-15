@@ -1,102 +1,124 @@
-# Définition d'un client réseau gérant en parallèle l'émission
-# et la réception des messages (utilisation de 2 THREADS).
-class Unbuffered(object):
-   def __init__(self, stream):
-       self.stream = stream
-   def write(self, data):
-       self.stream.write(data)
-       self.stream.flush()
-   def writelines(self, datas):
-       self.stream.writelines(datas)
-       self.stream.flush()
-   def __getattr__(self, attr):
-       return getattr(self.stream, attr)
-host = '5.51.214.63'
-port = 999
+
+# Définition d'un serveur réseau gérant un système de CHAT simplifié.
+# Utilise les threads pour gérer les connexions clientes en parallèle.
+ 
+HOST = '192.168.1.39'
+PORT = 999
+
+p1 ="""
+
+ .----------------. 
+| .--------------. |
+| |   ______     | |
+| |  |_   __ \   | |
+| |    | |__) |  | |
+| |    |  ___/   | |
+| |   _| |_      | |
+| |  |_____|     | |
+| |              | |
+| '--------------' |
+ '----------------' 
+
+"""
+k1 = """
+
+ .----------------. 
+| .--------------. |
+| |  ___  ____   | |
+| | |_  ||_  _|  | |
+| |   | |_/ /    | |
+| |   |  __'.    | |
+| |  _| |  \ \_  | |
+| | |____||____| | |
+| |              | |
+| '--------------' |
+ '----------------' 
+
+"""
+d1 = """
+ .----------------. 
+| .--------------. |
+| |  ________    | |
+| | |_   ___ `.  | |
+| |   | |   `. \ | |
+| |   | |    | | | |
+| |  _| |___.' / | |
+| | |________.'  | |
+| |              | |
+| '--------------' |
+ '----------------' 
+"""
+
 import socket, sys, threading
-from time import daylight, sleep
-sys.stdout = Unbuffered(sys.stdout)
-class ThreadReception(threading.Thread):
-    """objet thread gérant la réception des messages"""
-    def __init__(self, conn):
+from time import sleep
+class ThreadClient(threading.Thread):
+  '''dérivation d'un objet thread pour gérer la connexion avec un client'''
+  Mode = False 
+  def __init__(self, conn):
       threading.Thread.__init__(self)
-      self.connexion = conn           # réf. du socket de connexion
-        
-    def run(self):
-       while 1:
-          message_recu = self.connexion.recv(65536)
-          UDecode = message_recu.decode('Utf8')
-          if UDecode[0:3] == 'ft:' :
-             with open('received_file', 'wb') as f:
-               print('file openned')
-               while 1 :
-                 print('receiving data...')
-                 data = message_recu[3:65536]
-                 if not data:
-                     break
-                 f.write(data)
-          else :
-            print(message_recu.decode('Utf8'))
-            if message_recu =='' or message_recu.upper() == "FIN":
-                 break
+      self.connexion = conn
 
-        # Le thread <réception> se termine ici.
-        # On force la fermeture du thread <émission> :
-       th_E._Thread__stop()
-       print("Client arrêté. Connexion interrompue.")
-       self.connexion.close()
-    
-class ThreadEmission(threading.Thread):
-    """objet thread gérant l'émission des messages"""
-    def __init__(self, conn):
-        threading.Thread.__init__(self)
-        self.connexion = conn           # réf. du socket de connexion
-        
-    def run(self):
-        while 1:
-            message_emis = input('>')
-            if message_emis[0:3] == "ft:":
-                 file = input("Entrez le nom ou le Path du fichier à transférer : ")
-                 f = open(file,'rb')
-                 l = f.read(65536)
-                 while (l):
-                     data_send = b"ft:" + l
-                     self.connexion.send(data_send)
-                     print('Sent ',repr(data_send))
-                     l = f.read(65536)
-            else :
-                self.connexion.send(message_emis.encode('Utf8'))
-
-# Programme principal - Établissement de la connexion :
-connexion = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  def run(self):
+      a = 0     
+      nom = self.getName()
+      while 1:
+         msgClient = self.connexion.recv(65536)
+         UDecode = msgClient.decode('Utf8')
+         IdMode = UDecode[0:3]
+         if not msgClient or msgClient.upper() =="FIN":
+          break
+         elif IdMode == "id:" :
+           IdClient = UDecode[3:64]
+         elif IdMode =="ss:":
+           print("identification en cours....")
+           if UDecode[3:9] != "200489":
+              break  
+         elif IdMode == "ft:" :
+           data = msgClient
+           for cle in conn_client:
+	           if cle != nom:	  
+	              conn_client[cle].send(data)
+         elif IdMode == "co:" :
+            conn_client[nom].send(p1.encode("Utf8"))
+            sleep(0.5)
+            conn_client[nom].send(k1.encode("Utf8"))
+            sleep(0.5)
+            conn_client[nom].send(d1.encode("Utf8"))
+         else :
+          message = "%s> %s" % (IdClient, UDecode)
+          print(message)
+          # Faire suivre le message à tous les autres clients :
+          for cle in conn_client:
+	          if cle != nom:	  
+	              conn_client[cle].send(message.encode("Utf8"))
+ 
+      # Fermeture de la connexion :
+      self.connexion.close()	  # couper la connexion côté serveur
+      print("Client %s déconnecté." % nom)
+      # Le thread se termine ici
+ 
+# Initialisation du serveur - Mise en place du socket :
+mySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
-    connexion.connect((host, port))
+  mySocket.bind((HOST, PORT))
 except socket.error:
-    print ("La connexion a échoué.")
-    sys.exit()    
-print ("Connexion établie avec le serveur.")
-id = input("entrez votre identifiant : ")
-password = input("entrez le mot de passe de la salle : ")
-password = "ss:" + password
-id = "id:" + id
-connexion.send(id.encode('Utf8'))  
-connexion.send(password.encode('Utf8'))  
-a = 1
-b = 1
-print("authentification en cours")
-sleep(1)
-while a != 50:   
-     
-    print(".", end='')
-    a += b
-    sleep(0.01) 
-
-print(".")
-print("authentification terminée")
-
-# Dialogue avec le serveur : on lance deux threads pour gérer
-# indépendamment l'émission et la réception des messages :
-th_E = ThreadEmission(connexion)
-th_R = ThreadReception(connexion)
-th_E.start()
-th_R.start()
+  print("La liaison du socket à l'adresse choisie a échoué.")
+  sys.exit()
+print("Serveur prêt, en attente de requêtes ...")
+mySocket.listen(5)
+ 
+# Attente et prise en charge des connexions demandées par les clients :
+conn_client = {}	# dictionnaire des connexions clients
+while 1:
+  connexion, adresse = mySocket.accept()
+  # Créer un nouvel objet thread pour gérer la connexion :
+  th = ThreadClient(connexion)
+  th.start()
+  # Mémoriser la connexion dans le dictionnaire :
+  it = th.getName()	  # identifiant du thread
+  conn_client[it] = connexion
+  print("Client %s connecté, adresse IP %s, port %s." %\
+     (it, adresse[0], adresse[1]))
+  # Dialogue avec le client :
+  msg ="Vous êtes connecté. Envoyez vos messages."
+  connexion.send(msg.encode("Utf8"))
