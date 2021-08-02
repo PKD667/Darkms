@@ -12,11 +12,21 @@ class Unbuffered(object):
        self.stream.flush()
    def __getattr__(self, attr):
        return getattr(self.stream, attr)
-host = '5.51.214.63'
+host = '127.0.0.1'
 port = 999
-import socket, sys, threading
+FILESIZE = 4000000
+import logging
+from rich.logging import RichHandler
+import socket, sys, threading,os
 from time import daylight, sleep
 sys.stdout = Unbuffered(sys.stdout)
+Folder_Path = os.path.dirname(os.path.realpath(__file__))
+FORMAT = "%(message)s"
+logging.basicConfig(
+
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+)
+log = logging.getLogger("rich")
 class ThreadReception(threading.Thread):
     """objet thread gérant la réception des messages"""
     def __init__(self, conn):
@@ -24,27 +34,33 @@ class ThreadReception(threading.Thread):
       self.connexion = conn           # réf. du socket de connexion
         
     def run(self):
+       mode = 'none'
        while 1:
-          message_recu = self.connexion.recv(65536)
-          UDecode = message_recu.decode('Utf8')
-          if UDecode[0:3] == 'ft:' :
-             with open('received_file', 'wb') as f:
-               print('file openned')
-               while 1 :
-                 print('receiving data...')
-                 data = message_recu[3:65536]
-                 if not data:
-                     break
-                 f.write(data)
+          message_recu = self.connexion.recv(FILESIZE)
+          if mode == 'ftp' :
+             data = message_recu
+             with open(path , 'wb') as f:
+                log.info('file openned')
+                log.info('receiving data...')
+                f.write(data)
+                log.info('All is done , file is closed')
+             mode = 'none'
           else :
+           UDecode = message_recu.decode('Utf8')
+           if UDecode[0:3] == 'ft:' :
+                 filename = UDecode[3:FILESIZE]                 
+                 path = os.path.join(Folder_Path, "files",filename)
+                 log.info("processing PATH.................", path)
+                 log.info('receiving data...')
+                 mode = 'ftp'
+           else :
             print(message_recu.decode('Utf8'))
             if message_recu =='' or message_recu.upper() == "FIN":
                  break
-
         # Le thread <réception> se termine ici.
         # On force la fermeture du thread <émission> :
        th_E._Thread__stop()
-       print("Client arrêté. Connexion interrompue.")
+       log.fatal("Client arrêté. Connexion interrompue.")
        self.connexion.close()
     
 class ThreadEmission(threading.Thread):
@@ -54,19 +70,33 @@ class ThreadEmission(threading.Thread):
         self.connexion = conn           # réf. du socket de connexion
         
     def run(self):
+        print(Folder_Path)
+        file_tansfer_mode = False
         while 1:
-            message_emis = input('>')
-            if message_emis[0:3] == "ft:":
-                 file = input("Entrez le nom ou le Path du fichier à transférer : ")
+          #Transfer du fichier identifié
+          if file_tansfer_mode == True :
                  f = open(file,'rb')
-                 l = f.read(65536)
-                 while (l):
-                     data_send = b"ft:" + l
-                     self.connexion.send(data_send)
-                     print('Sent ',repr(data_send))
-                     l = f.read(65536)
-            else :
-                self.connexion.send(message_emis.encode('Utf8'))
+                 log.info("File opened.....")
+                 l = f.read(FILESIZE)
+                 log.info('Reading file...................')
+                 data_send = l
+                 message_emis = data_send
+                 log.info("Message envoyé ...............................................")
+                 file_tansfer_mode = False
+          else :
+            message_emis = input('>')
+            ident = message_emis[0:3]
+            message_emis = message_emis.encode('Utf8')
+            #Identification de la demande de file transfer
+            if ident == "ft:":
+                 filename = input("Entrez le nom du fichier à transférer : ")
+                 file = os.path.join(Folder_Path,filename)
+                 message_emis = ident + filename
+                 file_tansfer_mode = True
+                 message_emis = message_emis.encode('Utf8')
+                 
+          
+          self.connexion.send(message_emis)
 
 # Programme principal - Établissement de la connexion :
 connexion = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -74,9 +104,10 @@ connexion = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
     connexion.connect((host, port))
 except socket.error:
-    print ("La connexion a échoué.")
+    log.error("La connexion a échoué.")
     sys.exit()    
-print ("Connexion établie avec le serveur.")
+log.debug("Connexion établie avec le serveur.")
+connexion.send("dbg".encode('Utf8'))
 id = input("entrez votre identifiant : ")
 password = input("entrez le mot de passe de la salle : ")
 password = "ss:" + password
@@ -85,7 +116,7 @@ connexion.send(id.encode('Utf8'))
 connexion.send(password.encode('Utf8'))  
 a = 1
 b = 1
-print("authentification en cours")
+log.info("authentification en cours")
 sleep(1)
 while a != 50:   
      
@@ -94,7 +125,7 @@ while a != 50:
     sleep(0.01) 
 
 print(".")
-print("authentification terminée")
+log.info("authentification terminée")
 connexion.send("co:".encode('Utf8'))  
 
 # Dialogue avec le serveur : on lance deux threads pour gérer

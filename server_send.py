@@ -1,8 +1,10 @@
 # Définition d'un serveur réseau gérant un système de CHAT simplifié.
 # Utilise les threads pour gérer les connexions clientes en parallèle.
  
-HOST = '192.168.1.39'
+HOST = '127.0.0.1'
 PORT = 999
+FILESIZE = 4000000
+
 
 p1 ="""
 
@@ -48,8 +50,10 @@ d1 = """
  '----------------' 
 """
 
-import socket, sys, threading
+import socket, sys, threading,os
 from time import sleep
+Folder_Path = os.path.dirname(os.path.realpath(__file__))
+print(Folder_Path)
 class ThreadClient(threading.Thread):
   '''dérivation d'un objet thread pour gérer la connexion avec un client'''
   Mode = False 
@@ -58,31 +62,51 @@ class ThreadClient(threading.Thread):
       self.connexion = conn
 
   def run(self):
-      a = 0     
-      nom = self.getName()
-      while 1:
-         msgClient = self.connexion.recv(65536)
+    file_transfer_mode = False    
+    nom = self.getName()
+    while 1:
+      try :
+        msgClient = self.connexion.recv(FILESIZE)
+        if file_transfer_mode == True :
+            data = msgClient
+            for cle in conn_client:
+	            if cle != nom:	  
+	              conn_client[cle].send(data)
+            with open(path , 'wb') as f:
+               print('file openned')
+               print('receiving data...')
+               f.write(data)
+               print('All is done , file is closed')
+            file_transfer_mode = False
+        else :
          UDecode = msgClient.decode('Utf8')
          IdMode = UDecode[0:3]
          if not msgClient or msgClient.upper() =="FIN":
           break
          elif IdMode == "id:" :
-           IdClient = UDecode[3:64]
+           IdClient = UDecode[3:FILESIZE]
          elif IdMode =="ss:":
            print("identification en cours....")
            if UDecode[3:9] != "200489":
               break  
          elif IdMode == "ft:" :
-           data = msgClient
+           filename = UDecode[3:FILESIZE]
+           print(Folder_Path)
+           path = os.path.join(Folder_Path, "files",filename)
+           print("processing PATH.................", path)
+           message = 'ft:' + filename
            for cle in conn_client:
 	           if cle != nom:	  
-	              conn_client[cle].send(data)
+	              conn_client[cle].send(message.encode("Utf8"))
+           file_transfer_mode = True
          elif IdMode == "co:" :
             conn_client[nom].send(p1.encode("Utf8"))
             sleep(0.5)
             conn_client[nom].send(k1.encode("Utf8"))
             sleep(0.5)
             conn_client[nom].send(d1.encode("Utf8"))
+         elif IdMode == 'dbg' :
+            print("Pour l'instant tout va bien !")
          else :
           message = "%s> %s" % (IdClient, UDecode)
           print(message)
@@ -90,11 +114,13 @@ class ThreadClient(threading.Thread):
           for cle in conn_client:
 	          if cle != nom:	  
 	              conn_client[cle].send(message.encode("Utf8"))
- 
-      # Fermeture de la connexion :
-      self.connexion.close()	  # couper la connexion côté serveur
-      print("Client %s déconnecté." % nom)
-      # Le thread se termine ici
+      except ConnectionResetError :
+        print("ALERTE!\nCA MARCHE PAS LES POTES")
+        break
+    # Fermeture de la connexion :
+    self.connexion.close()	  # couper la connexion côté serveur
+    print("Client %s déconnecté." % nom)
+    # Le thread se termine ici
  
 # Initialisation du serveur - Mise en place du socket :
 mySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
