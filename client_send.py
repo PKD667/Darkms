@@ -1,136 +1,255 @@
+# Définition d'un serveur réseau gérant un système de CHAT simplifié.
+# Utilise les threads pour gérer les connexions clientes en parallèle.
+ 
+Host = 'localhost'
+Port = 9999
 
-# Définition d'un client réseau gérant en parallèle l'émission
-# et la réception des messages (utilisation de 2 THREADS).
-class Unbuffered(object):
-   def __init__(self, stream):
-       self.stream = stream
-   def write(self, data):
-       self.stream.write(data)
-       self.stream.flush()
-   def writelines(self, datas):
-       self.stream.writelines(datas)
-       self.stream.flush()
-   def __getattr__(self, attr):
-       return getattr(self.stream, attr)
-host = '127.0.0.1'
-port = 999
-FILESIZE = 4000000
-import logging
-from rich.logging import RichHandler
-import socket, sys, threading,os
-from time import daylight, sleep
-sys.stdout = Unbuffered(sys.stdout)
+
+style = """
+|=========================================================|\n
+|========================PKD==============================|\n
+***********************************************************\n
+"""
+
+import socket, sys, threading,os,random,subprocess
+import simpleaudio as sa
+filesize = 4096
+DiN = {}
+Queue = []
+cmd_queue = []
+password = "200489"
+admin = ['pkd']
 Folder_Path = os.path.dirname(os.path.realpath(__file__))
-FORMAT = "%(message)s"
-logging.basicConfig(
-
-    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
-)
-log = logging.getLogger("rich")
-class ThreadReception(threading.Thread):
-    """objet thread gérant la réception des messages"""
-    def __init__(self, conn):
+print(Folder_Path)
+def initialisation(self) :
+     """Fonction d'initialisation de l'adresse et du port du socket """
+     global Host
+     global Port
+     print("Initialisation du serveur ..........................")
+     Host = input("Entrez l'adresse du serveur (Default = localhost) : ")
+     Port = input("Entrez le port de service du serveur (Default = 999) :")
+class InputThread(threading.Thread) :
+  """Objet thread qui gère l'input de l'administrateur"""
+  def __init__(self) :
+    threading.Thread.__init__(self)
+  def run (self) :
+    while 1 :
+      global cmd_queue
+      texte = input()
+      cmd_queue.append(texte)
+class CommandThread(threading.Thread) :
+  def __init__(self) :
+    threading.Thread.__init__(self)
+  def run (self) :
+    commands =  [
+    ["close",["conncl"]],
+    ["set",["password"]],
+    ["debug",["true","false"]],
+    ["manage",["admin",["out","add"]]],
+    ["help"]
+    ]
+    while 1 :
+      global cmd_queue
+      global admin
+      admin_input = ''
+      global Queue
+      global password
+      try :
+          admin_input = cmd_queue[0]
+          cmd_queue.remove(admin_input)
+          cmd_queue.sort()
+      except IndexError :
+          pass
+      if admin_input[0:1] == '$' :
+        command = admin_input[1:4096]
+        cmd = command.split()
+        try :
+         if cmd[0] == "cmd" :
+           cmd_path = Folder_Path
+           subprocess.run("cd " + cmd_path,shell=True, check=True)
+           command = ""
+           while command != 'close' :
+             command = input(cmd_path + '>')
+             subprocess.run(command,shell=True, check=True)
+             if command.split()[0] == "cd" :
+               if command.split()[1][0:2] == "C:" :
+                 cmd_path = command.split()[1] 
+               else :
+                  cmd_path = os.path.join(cmd_path,command.split()[1])
+         elif cmd[0] == "close" :
+           if cmd[1] == "conncl" :
+            Queue.append('break' + ':' + cmd[2] )
+         elif cmd[0] == "set":
+            if cmd[1] == "password" :
+              password = cmd[2]
+         elif cmd[0] == 'debug' :
+              if cmd[1] == 'true' :
+                Queue.append('debug:True')
+              if cmd[1] == 'false'  :
+                    Queue.append('debug:False')
+         elif cmd[0] == "manage":
+             if cmd[1] == "admin" :
+               if cmd[2] == "out" :
+                 admin.remove(cmd[3])
+               elif cmd[2] == "add":
+                  admin.append(cmd[3])
+         elif cmd[0] == "help" :
+            print()
+        except IndexError :
+          pass
+      else :
+        pass
+class ThreadClient(threading.Thread):
+  '''dérivation d'un objet thread pour gérer la connexion avec un client'''
+  Mode = False 
+  def __init__(self, conn):
       threading.Thread.__init__(self)
-      self.connexion = conn           # réf. du socket de connexion
-        
-    def run(self):
-       mode = 'none'
-       while 1:
-          message_recu = self.connexion.recv(FILESIZE)
-          if mode == 'ftp' :
-             data = message_recu
-             with open(path , 'wb') as f:
-                log.info('file openned')
-                log.info('receiving data...')
-                f.write(data)
-                log.info('All is done , file is closed')
-             mode = 'none'
-          else :
-           UDecode = message_recu.decode('Utf8')
-           if UDecode[0:3] == 'ft:' :
-                 filename = UDecode[3:FILESIZE]                 
-                 path = os.path.join(Folder_Path, "files",filename)
-                 log.info("processing PATH.................", path)
-                 log.info('receiving data...')
-                 mode = 'ftp'
-           else :
-            print(message_recu.decode('Utf8'))
-            if message_recu =='' or message_recu.upper() == "FIN":
-                 break
-        # Le thread <réception> se termine ici.
-        # On force la fermeture du thread <émission> :
-       th_E._Thread__stop()
-       log.fatal("Client arrêté. Connexion interrompue.")
-       self.connexion.close()
-    
-class ThreadEmission(threading.Thread):
-    """objet thread gérant l'émission des messages"""
-    def __init__(self, conn):
-        threading.Thread.__init__(self)
-        self.connexion = conn           # réf. du socket de connexion
-        
-    def run(self):
-        print(Folder_Path)
-        file_tansfer_mode = False
-        while 1:
-          #Transfer du fichier identifié
-          if file_tansfer_mode == True :
-                 f = open(file,'rb')
-                 log.info("File opened.....")
-                 l = f.read(FILESIZE)
-                 log.info('Reading file...................')
-                 data_send = l
-                 message_emis = data_send
-                 log.info("Message envoyé ...............................................")
-                 file_tansfer_mode = False
-          else :
-            message_emis = input('>')
-            ident = message_emis[0:3]
-            message_emis = message_emis.encode('Utf8')
-            #Identification de la demande de file transfer
-            if ident == "ft:":
-                 filename = input("Entrez le nom du fichier à transférer : ")
-                 file = os.path.join(Folder_Path,filename)
-                 message_emis = ident + filename
-                 file_tansfer_mode = True
-                 message_emis = message_emis.encode('Utf8')
-                 
-          
-          self.connexion.send(message_emis)
+      self.connexion = conn
 
-# Programme principal - Établissement de la connexion :
-connexion = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  def run(self):
+    cmd = '0'
+    Break = False
+    Debug = False
+    mode = "msg"
+    nom = self.getName()
+    IdClient = nom
+    while 1:
 
+      global DiN
+      global password
+      global cmd_queue
+      global Queue
+      global admin 
+      global filesize
+      if Queue != [] :
+       for e in Queue :
+         if e == "break:" + IdClient :
+          Break = True
+          Queue.remove(e)
+         elif e == 'debug:True' :
+           Debug = True
+           Queue = Queue.remove(e)
+         elif e == 'debug:False' :
+           Debug = False
+           Queue = Queue.remove(e)
+      if Break == True :
+        break
+      try :
+       filesize = int(filesize)
+       msgClient = self.connexion.recv(filesize)
+
+       if mode == "ftp" :
+         try :
+            data = msgClient
+            for cle in conn_client:
+	            if cle != nom:	  
+	              conn_client[cle].send(data)
+            with open(path , 'wb') as f:
+               print('file openned')
+               print('receiving data...')
+               f.write(data)
+               print('All is done , file is closed')
+            mode = 'msg'
+         except FileNotFoundError :
+           print("Erreur : Le fichier specifié n'existe pas. ")
+       else :
+        try :
+         UDecode = msgClient.decode('Utf8')
+         msg_format = UDecode.split(":")
+         IdMode = msg_format[0]
+         if Debug == True : 
+              print('DEBUG, : UDecode :' , UDecode ,' msg_format : ' , msg_format,'IdMode : ' , IdMode)
+         if not msgClient or msgClient.upper() =="FIN":
+          break
+         elif IdMode == "id" :
+           IdClient = msg_format[1]
+           DiN[nom] = IdClient
+         elif IdMode == "$" :
+           for j in admin :
+              if j == IdClient :
+                cmd_queue.append(UDecode.replace(":"," "))
+         elif IdMode =="password":
+           print("identification en cours....")
+           if msg_format[1] != password:
+              break  
+         
+         elif IdMode == "ftp" :
+           filename = msg_format[1]
+           filesize = int(msg_format[2])
+
+           path = os.path.join(Folder_Path, "files",filename)
+           print("processing PATH.................", path)
+           message = 'ftp' + ':' + filename + ':' + str(filesize)
+           for cle in conn_client:
+	           if cle != nom:	  
+	              conn_client[cle].send(message.encode("Utf8"))
+           mode = 'ftp'
+         elif IdMode == "co" :
+            conn_client[nom].send(style.encode("Utf8"))
+         elif IdMode == 'dbg' :
+            print("Pour l'instant tout va bien !")
+         elif IdMode == '!' :
+           perso_msg = msg_format[2:]
+           print('msg ',IdClient,' to ',msg_format[1],' : ', perso_msg)
+           message = ''.join(perso_msg)
+           message = "!%s> %s" % (IdClient, message)
+           for cle in conn_client:
+              if DiN.get(cle) == msg_format[1] :
+	                conn_client[cle].send(message.encode("Utf8"))            
+         elif IdMode == 'msg' :
+          if msg_format[1] == "FIN" :
+                 Break = True
+          else : 
+            message = "%s> %s" % (IdClient, msg_format[1])
+            print(message)
+            # Faire suivre le message à tous les autres clients :
+            for cle in conn_client:
+	            if DiN.get(cle) != IdClient:	  
+	              conn_client[cle].send(message.encode("Utf8"))
+        except UnicodeDecodeError :
+          pass       
+      except (ConnectionResetError) :
+        print("ALERTE!\nCA MARCHE PAS LES POTES")
+        break 
+    # Fermeture de la connexion :
+    self.connexion.close()
+    # supprimer l'entrée du client dans le dictionaire conn_client
+    del conn_client[nom]
+    # couper la connexion côté serveur
+    print("Client %s déconnecté." % nom)
+    # Le thread se termine ici
+ 
+# Initialisation du serveur - Mise en place du socket :
+mySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
-    connexion.connect((host, port))
+  mySocket.bind((Host, Port))
 except socket.error:
-    log.error("La connexion a échoué.")
-    sys.exit()    
-log.debug("Connexion établie avec le serveur.")
-connexion.send("dbg".encode('Utf8'))
-id = input("entrez votre identifiant : ")
-password = input("entrez le mot de passe de la salle : ")
-password = "ss:" + password
-id = "id:" + id
-connexion.send(id.encode('Utf8'))  
-connexion.send(password.encode('Utf8'))  
-a = 1
-b = 1
-log.info("authentification en cours")
-sleep(1)
-while a != 50:   
-     
-    print(".", end='')
-    a += b
-    sleep(0.01) 
+  print("La liaison du socket à l'adresse choisie a échoué.")
+  sys.exit()
+# Its cool but it only works with an ide or from terminal so I disabled it ]:
+#filename = 'supernova.wav'
+#wave_obj = sa.WaveObject.from_wave_file(filename)
+#play_obj = wave_obj.play()
+#print('Serveur en attente de requetes ...............')
+mySocket.listen(5)
 
-print(".")
-log.info("authentification terminée")
-connexion.send("co:".encode('Utf8'))  
-
-# Dialogue avec le serveur : on lance deux threads pour gérer
-# indépendamment l'émission et la réception des messages :
-th_E = ThreadEmission(connexion)
-th_R = ThreadReception(connexion)
-th_E.start()
-th_R.start()
+ 
+# Attente et prise en charge des connexions demandées par les clients :
+conn_client = {}	# dictionnaire des connexions clients
+cmd = CommandThread()
+inpt = InputThread()
+inpt.start()
+cmd.start()
+while 1:
+  connexion, adresse = mySocket.accept()
+  # Créer un nouvel objet thread pour gérer la connexion :
+  th = ThreadClient(connexion)
+  th.start()
+  # Mémoriser la connexion dans le dictionnaire :
+  it = th.getName()	  # identifiant du thread
+  conn_client[it] = connexion
+  print("Client %s connecté, adresse IP %s, port %s." %\
+     (it, adresse[0], adresse[1]))
+  # Dialogue avec le client :
+  msg ="Vous êtes connecté. Envoyez vos messages."
+  connexion.send(msg.encode("Utf8"))
