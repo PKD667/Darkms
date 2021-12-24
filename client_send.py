@@ -2,7 +2,7 @@
 # Définition d'un client réseau gérant en parallèle l'émission
 # et la réception des messages (utilisation de 2 THREADS).
 
-host = ''
+host = '90.91.220.24'
 port = 9999
 input_queue = []
 filesize = 4096
